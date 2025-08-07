@@ -32,3 +32,8 @@ magnetic_potential_problem_2D/a_function/k_i_10.fig
 magnetic_potential_problem_2D/a_function/k_i_10.png
 magnetic_potential_problem_2D/a_function/k_i_50.fig
 magnetic_potential_problem_2D/a_function/k_i_50.png
+nonlinear_Stokes_3D/zmtlagmg.mexw64
+nonlinear_Stokes_3D/dmtlagmg.mexw64
+nonlinear_Stokes_3D/agmg.m
+nonlinear_Stokes_3D/isOctave.m
+nonlinear_Stokes_3D/nonlinear_Stokes_3D.asv
