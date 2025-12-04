@@ -1,5 +1,6 @@
 
-function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
+function [coord,elem,surf1,surf2,surf3,surf4,surf5,surf6]=...
+                              mesh_P1(density,size_xy_0,size_xy_L,size_z)
 
 % =========================================================================
 %
@@ -17,14 +18,24 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
 %              number of nodes
 %    elem    - array containing numbers of nodes defining each element,
 %              size(elem)=(4,n_e), n_e = number of elements
-%    surf    - array containing numbers of nodes defining each surface element,
-%              size(surf)=(3,n_s), n_s = number of surface elements
-%    neumann - array containing numbers of nodes defining each surface element,
-%              size(neumann)=(3,n_e_s). The surface is a part of the following side
-%              of the body: (0,size_xy) x size_xy x (0,size_z), where the nonhomogeneous
-%              Neumann boundary condition is considered.
-%    Q       - logical array indicating the nodes where the homogeneous 
-%              Dirichlet boundary condition is considered, size(Q)=(3,n_n)
+%    surf1    - array containing numbers of nodes defining each surface 
+%               element on the bottom face;
+%               size(surf)=(3,n_s1), n_s1 = number of surface elements
+%    surf2    - array containing numbers of nodes defining each surface 
+%               element on the top face;
+%               size(surf)=(3,n_s2), n_s2 = number of surface elements
+%    surf3    - array containing numbers of nodes defining each surface 
+%               element on the front face;
+%               size(surf)=(3,n_s3), n_s3 = number of surface elements
+%    surf4    - array containing numbers of nodes defining each surface 
+%               element on the right face;
+%               size(surf)=(3,n_s4), n_s4 = number of surface elements
+%    surf5    - array containing numbers of nodes defining each surface 
+%               element on the back face;
+%               size(surf)=(3,n_s5), n_s5 = number of surface elements
+%    surf6    - array containing numbers of nodes defining each surface 
+%               element on the left face;
+%               size(surf)=(3,n_s6), n_s6 = number of surface elements
 %
 % ======================================================================
 %
@@ -51,7 +62,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
 %
 % coordinates of nodes
 %
-  % coordinates in directions x, y and z
+  % coordinates in directions x, y and z (before transformation)
   coord_x=linspace(-size_xy_0/2,size_xy_0/2,N_x+1);
   coord_y=linspace(-size_xy_0/2,size_xy_0/2,N_y+1);
   coord_z=linspace(0,size_z,N_z+1);
@@ -118,8 +129,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
   elem=reshape(aux_elem,4,n_e);     
  
 %
-% Surface of the body - the array "surf"
-%
+% Surfaces of the body - the array "surf1,...,surf6"
   
   % For each face of the body, we define the restriction C_s of the array C 
   % and logical 2D arrays V1_s,...,V4_s which enable to select appropriate
@@ -147,7 +157,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
             C_s(V3_s)'; C_s(V4_s)'; C_s(V2_s)' ];
   surf2=reshape(aux_surf,3,2*N_x*N_y);       
   
-  % Face 3: y=0 (the front of the body)
+  % Face 3: y=-size_xy/2 (the front of the body)
   C_s=zeros(N_x+1,N_z+1);
   C_s(:,:)=C(:,1,:);  
   V1_s=false(N_x+1,N_z+1);  V1_s(1:N_x    ,1:N_z    )=1;
@@ -158,7 +168,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
             C_s(V2_s)'; C_s(V3_s)'; C_s(V1_s)' ];
   surf3=reshape(aux_surf,3,2*N_x*N_z);       
   
-  % Face 4: x=size_xy (the right hand side of the body)
+  % Face 4: x=size_xy/2 (the right hand side of the body)
   C_s=zeros(N_y+1,N_z+1);
   C_s(:,:)=C(end,:,:);  
   V1_s=false(N_y+1,N_z+1);  V1_s(1:N_y    ,1:N_z    )=1;
@@ -169,7 +179,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
             C_s(V3_s)'; C_s(V4_s)'; C_s(V2_s)' ];
   surf4=reshape(aux_surf,3,2*N_y*N_z);       
   
-  % Face 5: y=size_xy (the back of the body)
+  % Face 5: y=size_xy/2 (the back of the body)
   C_s=zeros(N_x+1,N_z+1);
   C_s(:,:)=C(:,end,:);  
   V1_s=false(N_x+1,N_z+1);  V1_s(1:N_x    ,1:N_z)=1;
@@ -180,7 +190,7 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
             C_s(V2_s)'; C_s(V3_s)'; C_s(V1_s)' ];
   surf5=reshape(aux_surf,3,2*N_x*N_z);       
   
-  % Face 6: x=0 (the left hand side of the body)
+  % Face 6: x=-size_xy/2 (the left hand side of the body)
   C_s=zeros(N_y+1,N_z+1);
   C_s(:,:)=C(1,:,:);  
   V1_s=false(N_y+1,N_z+1);  V1_s(1:N_y    ,1:N_z    )=1;
@@ -191,31 +201,4 @@ function [coord,elem,surf,neumann,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z)
             C_s(V3_s)'; C_s(V4_s)'; C_s(V2_s)' ];
   surf6=reshape(aux_surf,3,2*N_y*N_z);      
     
-  % the array "surf"
-  surf = [surf1 surf2 surf3 surf4 surf5 surf6] ;
-  
-%
-% Boundary conditions
-%
-    
-  % nonhomogeneous Neumann boundary conditions on a part of Face 2
-  N1_x = density;          % number of segments in x direction
-  C_s=zeros(N1_x+1,N1_x+1);
-  C_s(:,:)=C(1:N1_x+1,1:N1_x+1,end);  
-  V1_s=false(N1_x+1,N1_x+1);  V1_s(1:N1_x    ,1:N1_x)=1;
-  V2_s=false(N1_x+1,N1_x+1);  V2_s(2:(N1_x+1),1:N1_x)=1;
-  V3_s=false(N1_x+1,N1_x+1);  V3_s(2:(N1_x+1),2:(N1_x+1))=1;
-  V4_s=false(N1_x+1,N1_x+1);  V4_s(1:N1_x    ,2:(N1_x+1))=1;  
-  aux_surf=[C_s(V4_s)'; C_s(V1_s)'; C_s(V3_s)';
-            C_s(V2_s)'; C_s(V3_s)'; C_s(V1_s)' ];
-  neumann=reshape(aux_surf,3,2*N1_x*N1_x);       
-  
-  % logical array indicating the nodes with the Dirichlet boundary cond.
-  Q = true(size(coord));
-  Q(3,(coord(3,:)==0))=0;
-  Q(2,(coord(2,:)>= size_xy_0*0.49999)) = 0;     
-  Q(1,(coord(1,:)>= size_xy_0*0.49999)) = 0;   
-  Q(2,(coord(2,:)<=-size_xy_0*0.49999)) = 0;     
-  Q(1,(coord(1,:)<=-size_xy_0*0.49999)) = 0;   
-
 end

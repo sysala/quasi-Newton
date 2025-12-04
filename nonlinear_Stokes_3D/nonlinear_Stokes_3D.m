@@ -39,24 +39,43 @@ AGMG_present = 1;
   p = 1.1;
 
   % Constant volume force representing pore pressure gradient
-  gamma = 0.003 ; 
+  gamma = 0.008 ; 
 
-  % Initial velocity on the left-hand side
-  u_init = 5 ;   
+  % Boundary conditions - two available choices:
+  % 'BC1' - zero velocity field in the normal direction on the shell
+  % 'BC1' - zero velocity field in all directions on the shell
+  boundary='BC1';
+  u_z = 5 ;  % prescribed velocity in the direction z and at the prismatic centre 
 
 %
 % Mesh generation
 %
   switch(elem_type)
     case 'P1'
-        [COORD,ELEM,SURF,NEUMANN,Q]=mesh_P1(density,size_xy_0,size_xy_L,size_z);
+        [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
+                               mesh_P1(density,size_xy_0,size_xy_L,size_z);
         fprintf('P1 elements: \n')
     case 'P2'
-        [COORD,ELEM,SURF,NEUMANN,Q]=mesh_P2(density,size_xy_0,size_xy_L,size_z);
+        [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
+                               mesh_P2(density,size_xy_0,size_xy_L,size_z);
         fprintf('P2 elements: \n')
     otherwise
           disp('bad choice of element type');
   end          
+  SURF=[SURF1,SURF2,SURF3,SURF4,SURF5,SURF6];
+
+%
+% Arrays representing the prescribed boundary conditions
+%
+  switch(boundary)
+    case 'BC1'
+        [U_3,Q]=boundary_BC1(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
+    case 'BC2'
+        [U_3,Q]=boundary_BC2(COORD,SURF1,SURF3,SURF4,SURF5,SURF6,size_xy_0);
+    otherwise
+        disp('bad choice of element type');
+  end        
+  U_3=u_z*U_3;
 
 %
 % Data from the reference element
@@ -114,7 +133,7 @@ AGMG_present = 1;
 %    
 
   % initialization displacement
-  U_it = [zeros(1,n_n); zeros(1,n_n); u_init*ones(1,n_n)] ;     
+  U_it = [zeros(1,n_n); zeros(1,n_n); U_3] ;     
 
   % standard Newton method
   tic; 
@@ -161,6 +180,12 @@ AGMG_present = 1;
   a=mu_infty+(mu_0-mu_infty).*(1+lambda.*(r.^2)).^(p/2-1);
   a_node=transformation(a,ELEM,WEIGHT);
   draw_quantity(COORD,SURF,0*U_N,a_node,elem_type,size_xy_0,size_xy_L,size_z);
+  colorbar off; colorbar('location','eastoutside')  
+
+  % values of div u
+  div=E(1,:)+E(2,:)+E(3,:);
+  div_node=transformation(div,ELEM,WEIGHT);
+  draw_quantity(COORD,SURF,0*U_N,div_node,elem_type,size_xy_0,size_xy_L,size_z);
   colorbar off; colorbar('location','eastoutside')  
 
   % convergence of the Newton-like solvers 
