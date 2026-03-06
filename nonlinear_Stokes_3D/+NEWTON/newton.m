@@ -1,4 +1,4 @@
-function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
+function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p,linear_system_solver)
 
     %--------------------------------------------------------------------------
     % The Newton method for solution of the system
@@ -40,7 +40,6 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
     %
     it_max = 100; % maximal number of iterations
     crit_hist = zeros(1, it_max);
-    deflation_basis = [];
 
     %
     % Newton's solver (the semismooth Newton method)
@@ -68,7 +67,8 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
         K_tangent = B' * D_p * B;
         A_N = K_tangent(Q, Q);
         A_N = (A_N + A_N') / 2;
-        precond = LINEAR_SOLVERS.diag_prec(A_N, Q);
+        linear_system_solver.setup_preconditioner(A_N);
+        linear_system_solver.A_orthogonalize(A_N);
 
         % stopping criterion
         criterion = norm(b_N) / norm(f(Q));
@@ -91,13 +91,9 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
             break
         end
 
-        % deflated pcg solver with incomplete cholesky preconditioner
-        tol = 1e-4; % precision of DCG solver
-        max_iter = 1000; % DCG max iters
-        [dU(Q), iter, ~, ~] = LINEAR_SOLVERS.DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
+        [dU(Q), iter] = linear_system_solver.solve(A_N, b_N);
         itcg = itcg + iter;
-        [W_orth] = LINEAR_SOLVERS.my_orth_simple(deflation_basis, dU(Q)); % orthogonalization of deflation space
-        deflation_basis = [deflation_basis W_orth]; % expanding deflation space
+        linear_system_solver.expand_deflation_basis(dU(Q));
         % fprintf('%d ', iter);
 
         % update of the unknown vector

@@ -17,80 +17,96 @@ script_dir = fileparts(mfilename('fullpath'));
 addpath(script_dir);
 agmg_dir = fullfile(script_dir, 'agmg');
 
-% if there is AGMG solver present in path (function agmg(...))
-% "Notay, Y. AGMG software and documentation. Available at http://agmg.eu"
-% Note: academic licence is free upon an email request
-global AGMG_present
 if exist(fullfile(agmg_dir, 'agmg.m'), 'file') == 2
     addpath(agmg_dir);
 end
-has_agmg_backend = exist('dmtlagmg', 'file') == 3 || exist('zmtlagmg', 'file') == 3 || ...
-    exist('dmtlagmg_sm', 'file') == 3 || exist('zmtlagmg_sm', 'file') == 3;
-if exist('agmg', 'file') == 2 && has_agmg_backend
-    AGMG_present = 1;
-else
-    AGMG_present = 0;
-    fprintf('AGMG not usable from %s, falling back to ichol preconditioning.\n', agmg_dir);
-end
 
 %
-% Main input data 
-% 
+% Main input data
+%
 
-  % Element, mesh and geometrical data 
-  elem_type='P1'; % available choices of finite elements: 'P1', 'P2'
-                  % for P2 elements, it is necessary to change
-                  % the regularization parameter within inner solvers
-  density=12;      % a positive integer defining mesh density in x-direction
-  size_xy_0 = 6;  % size of the body in directions x and y on the left
-  size_xy_L = 5;  % size of the body in directions x and y on the right
-  size_z = 50;      % size of the body in z-direction  
-  % It is assumed that size_xy_L < size_xy_0 < size_z.
+% Element, mesh and geometrical data
+if ~exist('elem_type', 'var')
+    elem_type='P1'; % available choices of finite elements: 'P1', 'P2'
+end
+% for P2 elements, it is necessary to change
+% the regularization parameter within inner solvers
+if ~exist('density', 'var')
+    density=12;      % a positive integer defining mesh density in x-direction
+end
+size_xy_0 = 6;  % size of the body in directions x and y on the left
+size_xy_L = 5;  % size of the body in directions x and y on the right
+size_z = 50;      % size of the body in z-direction
+% It is assumed that size_xy_L < size_xy_0 < size_z.
 
-  % Material parameters
-  mu_0 = 1;                         
-  mu_infty = 1e-3;   
-  lambda = 10;
-  p = 1.1;
+% Material parameters
+mu_0 = 1;
+mu_infty = 1e-3;
+lambda = 10;
+p = 1.1;
 
-  % Constant volume force representing pore pressure gradient
-  gamma = 0.008 ; 
+% Constant volume force representing pore pressure gradient
+gamma = 0.008 ;
 
-  % Boundary conditions - two available choices:
-  % 'BC1' - zero velocity field in the normal direction on the shell
-  % 'BC1' - zero velocity field in all directions on the shell
-  boundary='BC1';
-  u_z = 5 ;  % prescribed velocity in the direction z and at the prismatic centre 
+% Boundary conditions - two available choices:
+% 'BC1' - zero velocity field in the normal direction on the shell
+% 'BC1' - zero velocity field in all directions on the shell
+boundary='BC1';
+u_z = 5 ;  % prescribed velocity in the direction z and at the prismatic centre
+
+% Linear solver configuration
+if ~exist('solver_type', 'var')
+    solver_type = "DFGMRES_HYPRE_BOOMERAMG";
+end
+if ~exist('linear_solver_tolerance', 'var')
+    linear_solver_tolerance = 1e-1;
+end
+if ~exist('linear_solver_maxit', 'var')
+    linear_solver_maxit = 1000;
+end
+if ~exist('deflation_basis_tolerance', 'var')
+    deflation_basis_tolerance = 1e-10;
+end
+if ~exist('linear_solver_printing', 'var')
+    linear_solver_printing = 0;
+end
+if ~exist('boomeramg_opts', 'var')
+    boomeramg_opts = struct('threads', 16, 'print_level', 0, ...
+        'use_as_preconditioner', true);
+end
+if ~exist('run_postprocess', 'var')
+    run_postprocess = true;
+end
 
 %
 % Mesh generation
 %
-  switch(elem_type)
+switch(elem_type)
     case 'P1'
         [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
-                               MESH.mesh_P1(density,size_xy_0,size_xy_L,size_z);
+            MESH.mesh_P1(density,size_xy_0,size_xy_L,size_z);
         fprintf('P1 elements: \n')
     case 'P2'
         [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
-                               MESH.mesh_P2(density,size_xy_0,size_xy_L,size_z);
+            MESH.mesh_P2(density,size_xy_0,size_xy_L,size_z);
         fprintf('P2 elements: \n')
     otherwise
-          disp('bad choice of element type');
-  end          
-  SURF=[SURF1,SURF2,SURF3,SURF4,SURF5,SURF6];
+        disp('bad choice of element type');
+end
+SURF=[SURF1,SURF2,SURF3,SURF4,SURF5,SURF6];
 
 %
 % Arrays representing the prescribed boundary conditions
 %
-  switch(boundary)
+switch(boundary)
     case 'BC1'
         [U_3,Q]=MESH.boundary_BC1(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
     case 'BC2'
         [U_3,Q]=MESH.boundary_BC2(COORD,SURF1,SURF3,SURF4,SURF5,SURF6,size_xy_0);
     otherwise
         disp('bad choice of element type');
-  end        
-  U_3=u_z*U_3;
+end
+U_3=u_z*U_3;
 
 %
 % Data from the reference element
@@ -107,107 +123,119 @@ end
 %
 % Number of nodes, elements and integration points + print
 %
-  n_n = size(COORD, 2); % number of nodes
-  n_unknown = length(COORD(Q)); % number of unknowns
-  n_e = size(ELEM, 2); % number of elements
-  n_q = length(WF); % number of quadratic points
-  n_int = n_e * n_q; % total number of integrations points
-  fprintf('number of nodes =%d ',n_n);
-  fprintf('\n');
-  fprintf('number of unknowns =%d ', n_unknown);
-  fprintf('\n');
-  fprintf('number of elements =%d ',n_e);
-  fprintf('\n');
-  fprintf('number of integration points =%d ',n_int);
-  fprintf('\n');
+n_n = size(COORD, 2); % number of nodes
+n_unknown = length(COORD(Q)); % number of unknowns
+n_e = size(ELEM, 2); % number of elements
+n_q = length(WF); % number of quadratic points
+n_int = n_e * n_q; % total number of integrations points
+fprintf('number of nodes =%d ',n_n);
+fprintf('\n');
+fprintf('number of unknowns =%d ', n_unknown);
+fprintf('\n');
+fprintf('number of elements =%d ',n_e);
+fprintf('\n');
+fprintf('number of integration points =%d ',n_int);
+fprintf('\n');
 
-% 
-% Values of material parameters at integration points      
 %
-  mu_0 = mu_0*ones(1,n_int) ;        
-  mu_infty = mu_infty*ones(1,n_int) ;        
-  lambda =lambda*ones(1,n_int);
-  gamma=gamma*ones(1,n_int);
-   
+% Values of material parameters at integration points
+%
+mu_0 = mu_0*ones(1,n_int) ;
+mu_infty = mu_infty*ones(1,n_int) ;
+lambda =lambda*ones(1,n_int);
+gamma=gamma*ones(1,n_int);
+
 %
 % Assembling of auxiliary arrays for Newton's and quasi-Newton's methods
-%  
-  [B,K_elast,WEIGHT]=ASSEMBLY.auxiliary_matrices(ELEM,COORD,mu_0,...
-                                                  DHatP1,DHatP2,DHatP3,WF);  
+%
+[B,K_elast,WEIGHT]=ASSEMBLY.auxiliary_matrices(ELEM,COORD,mu_0,...
+    DHatP1,DHatP2,DHatP3,WF);
 
 %
 % Assembling of the vector of volume forces.
-% 
-  % Volume forces at integration points: f_V_int has size (3, n_int).
-  f_V_int = [zeros(1, n_int); zeros(1, n_int); -gamma];
-  % Compute the volume force vector.
-  f = ASSEMBLY.vector_volume_3D(ELEM, COORD, f_V_int, HatP, WEIGHT);
+%
+% Volume forces at integration points: f_V_int has size (3, n_int).
+f_V_int = [zeros(1, n_int); zeros(1, n_int); -gamma];
+% Compute the volume force vector.
+f = ASSEMBLY.vector_volume_3D(ELEM, COORD, f_V_int, HatP, WEIGHT);
 
 %
 % Newton's and quasi-Newton's solvers
-%    
-
-  % initialization displacement
-  U_it = [zeros(1,n_n); zeros(1,n_n); U_3] ;     
-
-  % standard Newton method
-  tic; 
-  [U_N, it_N, crit_hist_N]=NEWTON.newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p);
-  time_Newton=toc;
-  fprintf("     solver's runtime:  " + time_Newton + "-----\n");
-
-  % quasi-Newton method - preconditioner 1 (simplified stiffness matrix with variable coefficients)
-  tic; 
-  [U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1]=NEWTON.newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
-  time_qNewton1=toc;
-  fprintf("     solver's runtime:  " + time_qNewton1 + "-----\n");
-
-  % quasi-Newton method - preconditioner 2 (simplified stiffness matrix with fixed coefficients)
-  tic; 
-  [U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2]=NEWTON.newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
-  time_qNewton2=toc;
-  fprintf("     solver's runtime:  " + time_qNewton2 + "-----\n");
-
-%  
-% Visualization of selected results
 %
 
-  % mesh  
-  if density<5
-   VIZ.draw_mesh(COORD,SURF,elem_type) 
-  end
+linear_system_solver = LINEAR_SOLVERS.set_linear_solver(agmg_dir, solver_type, ...
+    linear_solver_tolerance, linear_solver_maxit, deflation_basis_tolerance, ...
+    linear_solver_printing, Q, COORD, boomeramg_opts);
 
-  % total displacements + deformed shape - newton
-  U_total = sqrt(U_N(1,:).^2 + U_N(2,:).^2 + U_N(3,:).^2);
-  VIZ.draw_quantity(COORD,SURF,1*U_N,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
+% initialization displacement
+U_it = [zeros(1,n_n); zeros(1,n_n); U_3] ;
 
-  % U_total = sqrt(U_qN1(1,:).^2 + U_qN1(2,:).^2 + U_qN1(3,:).^2);
-  % VIZ.draw_quantity(COORD,SURF,1*U_qN1,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
-  % U_total = sqrt(U_qN2(1,:).^2 + U_qN2(2,:).^2 + U_qN2(3,:).^2);
-  % VIZ.draw_quantity(COORD,SURF,1*U_qN2,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
+% standard Newton method
+tic;
+[U_N, it_N, crit_hist_N]=NEWTON.newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p, ...
+    linear_system_solver.copy());
+time_Newton=toc;
+fprintf("     solver's runtime:  " + time_Newton + "-----\n");
 
-  % values of the function a
-  E= reshape( B*U_N(:) , 6,[] ) ;
-  IDENT=diag([1,1,1,1/2,1/2,1/2]); 
-  tilde_E=IDENT*E;                 % deviatoric part of E
-  z=max(0,sum(E.*tilde_E));        % scalar product of the deviatoric strain
-  r=sqrt(z);                       % norm of the deviatoric strain
-  a=mu_infty+(mu_0-mu_infty).*(1+lambda.*(r.^2)).^(p/2-1);
-  a_node=VIZ.transformation(a,ELEM,WEIGHT);
-  VIZ.draw_quantity(COORD,SURF,0*U_N,a_node,elem_type,size_xy_0,size_xy_L,size_z);
-  colorbar off; colorbar('location','eastoutside')  
+% quasi-Newton method - preconditioner 1 (simplified stiffness matrix with variable coefficients)
+tic;
+[U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1]=NEWTON.newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
+    linear_system_solver.copy());
+time_qNewton1=toc;
+fprintf("     solver's runtime:  " + time_qNewton1 + "-----\n");
 
-  % values of div u
-  div=E(1,:)+E(2,:)+E(3,:);
-  div_node=VIZ.transformation(div,ELEM,WEIGHT);
-  VIZ.draw_quantity(COORD,SURF,0*U_N,div_node,elem_type,size_xy_0,size_xy_L,size_z);
-  colorbar off; colorbar('location','eastoutside')  
+% quasi-Newton method - preconditioner 2 (simplified stiffness matrix with fixed coefficients)
+tic;
+[U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2]=NEWTON.newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
+    linear_system_solver.copy());
+time_qNewton2=toc;
+fprintf("     solver's runtime:  " + time_qNewton2 + "-----\n");
 
-  % convergence of the Newton-like solvers 
-  VIZ.figure_convergence(1:it_N, crit_hist_N, ...
-                     1:it_qN1, crit_hist_qN1, ...
-                     1:it_qN2, crit_hist_qN2)
+if contains(upper(string(solver_type)), "BOOMERAMG")
+    LINEAR_SOLVERS.hypre_boomeramg_clear();
+end
 
-  % line search coefficients
-  VIZ.figure_omega(1:it_qN1-1, omega_hist_qN1,...
-               1:it_qN2-1, omega_hist_qN2)
+%
+% Visualization of selected results
+%
+if run_postprocess
+    % mesh
+    if density<5
+        VIZ.draw_mesh(COORD,SURF,elem_type)
+    end
+
+    % total displacements + deformed shape - newton
+    U_total = sqrt(U_N(1,:).^2 + U_N(2,:).^2 + U_N(3,:).^2);
+    VIZ.draw_quantity(COORD,SURF,1*U_N,U_total,elem_type,size_xy_0,size_xy_L,size_z)
+
+    % U_total = sqrt(U_qN1(1,:).^2 + U_qN1(2,:).^2 + U_qN1(3,:).^2);
+    % VIZ.draw_quantity(COORD,SURF,1*U_qN1,U_total,elem_type,size_xy_0,size_xy_L,size_z)
+    % U_total = sqrt(U_qN2(1,:).^2 + U_qN2(2,:).^2 + U_qN2(3,:).^2);
+    % VIZ.draw_quantity(COORD,SURF,1*U_qN2,U_total,elem_type,size_xy_0,size_xy_L,size_z)
+
+    % values of the function a
+    E= reshape( B*U_N(:) , 6,[] ) ;
+    IDENT=diag([1,1,1,1/2,1/2,1/2]);
+    tilde_E=IDENT*E;                 % deviatoric part of E
+    z=max(0,sum(E.*tilde_E));        % scalar product of the deviatoric strain
+    r=sqrt(z);                       % norm of the deviatoric strain
+    a=mu_infty+(mu_0-mu_infty).*(1+lambda.*(r.^2)).^(p/2-1);
+    a_node=VIZ.transformation(a,ELEM,WEIGHT);
+    VIZ.draw_quantity(COORD,SURF,0*U_N,a_node,elem_type,size_xy_0,size_xy_L,size_z);
+    colorbar off; colorbar('location','eastoutside')
+
+    % values of div u
+    div=E(1,:)+E(2,:)+E(3,:);
+    div_node=VIZ.transformation(div,ELEM,WEIGHT);
+    VIZ.draw_quantity(COORD,SURF,0*U_N,div_node,elem_type,size_xy_0,size_xy_L,size_z);
+    colorbar off; colorbar('location','eastoutside')
+
+    % convergence of the Newton-like solvers
+    VIZ.figure_convergence(1:it_N, crit_hist_N, ...
+        1:it_qN1, crit_hist_qN1, ...
+        1:it_qN2, crit_hist_qN2)
+
+    % line search coefficients
+    VIZ.figure_omega(1:it_qN1-1, omega_hist_qN1,...
+        1:it_qN2-1, omega_hist_qN2)
+end

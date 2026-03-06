@@ -1,93 +1,46 @@
-function [x, iter, resvec, tag] = DCG(A, b, x0, W, M, tol, maxiter)
-    % =========================================================================
+classdef DCG < LINEAR_SOLVERS.DFGMRES
+    %--------------------------------------------------------------------------
+    % DIRECT_BACKSLASH implements a direct solver using MATLAB's backslash operator.
     %
-    % The preconditioned conjugate gradient method with deflation.
+    % This class inherits from LINEAR_SOLVERS.DFGMRES to provide a consistent
+    % interface with other iterative solvers. It does not require any preconditioning,
+    % deflation basis expansion, or orthogonalization, so those methods are overridden
+    % with empty implementations.
     %
-    % Input data:
-    %  A     - matrix
-    %  b     - right hand side
-    %  x0    - initial guess
-    %  W     - deflation matrix
-    %  M     - preconditioner
-    %  tol   - stopping tolerance
-    %  maxiter - maximum number of iterations
-    %
-    % Output data:
-    %  x     - solution
-    %  iter  - number of iterations
-    %  resvec- residual history
-    %  tag   - termination tag
-    %
-    % =========================================================================
-    %
-
-    if isempty(W)
-        P = @(x)x;
-        Q = @(x)0;
-    else
-        WTAW = W' * A * W;
-        WTAW_inv = inv(WTAW);
-        WTAW_inv_Wt_A = WTAW_inv * W' * A;
-        Q = @(x)W * (WTAW_inv * ((W') * x));
-        P = @(x)x - W * (WTAW_inv_Wt_A * x);
-    end
-
-    if isempty(M)
-        M = @(x)x;
-    end
-
-    if isa(M, 'numeric')
-        M_mat = M;
-        M = @(x)M_mat \ x;
-    end
-
-    if isempty(x0)
-        x0 = 0 * b;
-    end
-
-    A = @(x)A * x;
-
-    r0 = b - A(x0);
-    x = x0 + Q(r0);
-    b_norm = norm(b);
-    res = norm(A(x) - b) / b_norm;
-
-    if res < tol || maxiter == 0 || b_norm == 0
-        tag = 0;
-        resvec = res;
-        iter = 0;
-        return
-    end
-
-    r = b - A(x);
-    z = M(r);
-    p = P(z);
-
-    gamma_old = dot(r, z);
-    tag = 3;
-    resvec = zeros(maxiter + 1, 1);
-    resvec(1) = res;
-
-    for j = 1:maxiter
-        s = A(p);
-        alpha = gamma_old / dot(s, p);
-        x = x + alpha * p;
-        r = r - alpha * s;
-        res = norm(r) / b_norm;
-        resvec(j + 1) = res;
-
-        if res < tol
-            tag = 1;
-            break;
+    % The constructor takes no input arguments.
+    %--------------------------------------------------------------------------
+    
+    methods
+        function obj = DCG(preconditioner_builder, tolerance, max_iterations, tolerance_deflation_basis, verbose)
+            %--------------------------------------------------------------------------
+            % DCG Constructor.
+            %
+            %   obj = DCG(preconditioner_builder, tolerance, max_iterations, tolerance_deflation_basis, verbose)
+            %
+            % Inputs:
+            %   preconditioner_builder   - Function or handle to build the preconditioner.
+            %   tolerance                - Convergence tolerance for GMRES.
+            %   max_iterations           - Maximum number of iterations allowed.
+            %   tolerance_deflation_basis- Tolerance for deflation basis orthogonalization.
+            %   verbose                  - Logical flag for verbose output.
+            %
+            % The constructor calls the superclass (DFGMRES) constructor.
+            %--------------------------------------------------------------------------
+            obj@LINEAR_SOLVERS.DFGMRES(preconditioner_builder, tolerance, max_iterations, tolerance_deflation_basis, verbose);
         end
-
-        z = M(r);
-        gamma_new = dot(r, z);
-        beta = gamma_new / gamma_old;
-        p = P(z) + beta * p;
-        gamma_old = gamma_new;
+        
+        function [u, nit] = solve_core(obj, A, b)
+            %--------------------------------------------------------------------------
+            % solve_core is the core implementation of the flexible GMRES solver.
+            %
+            %   [u, nit] = obj.solve_core(A, b)
+            %
+            % It calls the function flexible_GMRES_deflate from the LINEAR_SOLVERS
+            % package with the provided parameters.
+            %--------------------------------------------------------------------------
+            [u, nit, residuals] = LINEAR_SOLVERS.dcg_solver(A, b, ...
+                obj.preconditioner, obj.deflation_basis, ...
+                obj.max_iterations, obj.tolerance, []);
+        end
     end
-
-    resvec = resvec(1:j + 1);
-    iter = j;
 end

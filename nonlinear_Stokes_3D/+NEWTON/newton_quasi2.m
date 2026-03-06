@@ -1,4 +1,4 @@
-function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p)
+function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p,linear_system_solver)
 
 
     %--------------------------------------------------------------------------
@@ -40,21 +40,11 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
     A_N = K_elast(Q, Q);
     A_N = (A_N + A_N') / 2;
 
-    % incomplete Cholesky for the elastic stiffness matrix
-
-    % arrays for recycling whole Krylov spaces
-    krylov_recycle = struct();
-    krylov_recycle.max_size = 1000;
-    krylov_recycle.max_iter = 0;
-    krylov_recycle.WTAW_inv_Wt_A = [];
-    krylov_recycle.krylov_space_vals_all = [];
-    krylov_recycle.W = [];
-
     %
     it_max = 200;
     crit_hist = zeros(1, it_max);
     omega_hist = zeros(1, it_max);
-    precond = LINEAR_SOLVERS.diag_prec(A_N, Q);
+    linear_system_solver.setup_preconditioner(A_N);
     %
     % Quasi-Newton's solver (Preconditioner 2)
     %
@@ -98,16 +88,10 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
             break
         end
 
-        % deflated pcg solver with incomplete cholesky preconditioner
-        tol = 1e-1;
-        max_iter = 30;
-        [dU(Q), iter, resvec, flag, krylov_recycle] = ...
-            LINEAR_SOLVERS.DCG_adaptive(A_N, b_N, b_N * 0, precond, tol, max_iter, krylov_recycle);
+        linear_system_solver.A_orthogonalize(A_N);
+        [dU(Q), iter] = linear_system_solver.solve(A_N, b_N);
         itcg = itcg + iter;
-
-        if it == 1
-            krylov_recycle.max_size = min(4 * iter, krylov_recycle.max_size);
-        end
+        linear_system_solver.expand_deflation_basis(dU(Q));
 
         %fprintf('%d ', iter);
 

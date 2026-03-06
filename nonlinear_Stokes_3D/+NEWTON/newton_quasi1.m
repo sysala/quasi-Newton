@@ -1,4 +1,4 @@
-function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p)
+function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p,linear_system_solver)
 
     %--------------------------------------------------------------------------
     % The quasi-Newton method with Preconditioner 1 for solution of the system
@@ -47,9 +47,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f
     it_max = 100;
     crit_hist = zeros(1, it_max);
     omega_hist = zeros(1, it_max);
-    deflation_basis = [];
-
-    precond = LINEAR_SOLVERS.diag_prec(K_elast(Q, Q), Q);
+    linear_system_solver.setup_preconditioner(K_elast(Q, Q));
     %
     % Quasi-Newton's solver (Preconditioner 1)
     %
@@ -106,13 +104,10 @@ function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f
             break
         end
 
-        % deflated pcg solver with incomplete cholesky preconditioner
-        tol = 1e-1;
-        max_iter = 1000;
-        [dU(Q), iter, ~, ~] = LINEAR_SOLVERS.DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
+        linear_system_solver.A_orthogonalize(A_N);
+        [dU(Q), iter] = linear_system_solver.solve(A_N, b_N);
         itcg = itcg + iter;
-        [W_orth] = LINEAR_SOLVERS.my_orth_simple(deflation_basis, dU(Q));
-        deflation_basis = [deflation_basis W_orth];
+        linear_system_solver.expand_deflation_basis(dU(Q));
         % fprintf('%d ', iter);
 
         % update of the unknown vector
