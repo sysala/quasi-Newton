@@ -49,7 +49,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f
     omega_hist = zeros(1, it_max);
     deflation_basis = [];
 
-    precond = diag_prec(K_elast(Q, Q), Q);
+    precond = LINEAR_SOLVERS.diag_prec(K_elast(Q, Q), Q);
     %
     % Quasi-Newton's solver (Preconditioner 1)
     %
@@ -63,7 +63,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f
 
         % solution of the constitutive problem
         E(:) = B * U(:); % strain at integration points
-        [S,DS_D,m,M]=constitutive_problem_quasi1(E,mu_0,mu_infty,lambda,p);
+        [S,DS_D,m,M]=CONSTITUTIVE_PROBLEM.constitutive_problem_quasi1(E,mu_0,mu_infty,lambda,p);
                           % solution of the constitutive problem
        
         % stiffness matrix related to Preconditioner 1
@@ -109,9 +109,9 @@ function [U, it, crit_hist, omega_hist] = newton_quasi1(U_ini,WEIGHT,K_elast,B,f
         % deflated pcg solver with incomplete cholesky preconditioner
         tol = 1e-1;
         max_iter = 1000;
-        [dU(Q), iter, ~, ~] = DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
+        [dU(Q), iter, ~, ~] = LINEAR_SOLVERS.DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
         itcg = itcg + iter;
-        [W_orth] = my_orth_simple(deflation_basis, dU(Q));
+        [W_orth] = LINEAR_SOLVERS.my_orth_simple(deflation_basis, dU(Q));
         deflation_basis = [deflation_basis W_orth];
         % fprintf('%d ', iter);
 

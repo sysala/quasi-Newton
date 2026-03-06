@@ -56,7 +56,7 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
         % constitutive operator and its derivative
         E(:) = B * U(:); % strain at integration points
         % solution of the constitutive problem
-        [S, DS] = constitutive_problem(E,mu_0,mu_infty,lambda,p);
+        [S, DS] = CONSTITUTIVE_PROBLEM.constitutive_problem(E,mu_0,mu_infty,lambda,p);
 
         % vector of internal forces
         F(:) = B' * reshape(repmat(WEIGHT, 6, 1) .* S, 6 * n_int, 1);
@@ -68,7 +68,7 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
         K_tangent = B' * D_p * B;
         A_N = K_tangent(Q, Q);
         A_N = (A_N + A_N') / 2;
-        precond = diag_prec(A_N, Q);
+        precond = LINEAR_SOLVERS.diag_prec(A_N, Q);
 
         % stopping criterion
         criterion = norm(b_N) / norm(f(Q));
@@ -94,9 +94,9 @@ function [U, it, crit_hist] = newton(U_ini,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p)
         % deflated pcg solver with incomplete cholesky preconditioner
         tol = 1e-4; % precision of DCG solver
         max_iter = 1000; % DCG max iters
-        [dU(Q), iter, ~, ~] = DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
+        [dU(Q), iter, ~, ~] = LINEAR_SOLVERS.DCG(A_N, b_N, b_N * 0, deflation_basis, precond, tol, max_iter);
         itcg = itcg + iter;
-        [W_orth] = my_orth_simple(deflation_basis, dU(Q)); % orthogonalization of deflation space
+        [W_orth] = LINEAR_SOLVERS.my_orth_simple(deflation_basis, dU(Q)); % orthogonalization of deflation space
         deflation_basis = [deflation_basis W_orth]; % expanding deflation space
         % fprintf('%d ', iter);
 

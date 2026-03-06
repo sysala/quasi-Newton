@@ -32,7 +32,8 @@ function draw_quantity(coord,surf,U,Q_node,elem_type,size_xy_0,size_xy_L,size_z)
      s = patch('Faces',surf(1:4,:)','Vertices',coord'+U',...
         'FaceVertexCData',Q_node','FaceColor','interp','EdgeColor','none'); 
   end
-  if ~isOctave  
+  is_octave = exist('OCTAVE_VERSION', 'builtin') ~= 0;
+  if ~is_octave
     alpha(s,.5);
   end
   colorbar;

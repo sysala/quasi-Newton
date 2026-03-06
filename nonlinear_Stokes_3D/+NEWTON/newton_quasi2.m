@@ -54,7 +54,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
     it_max = 200;
     crit_hist = zeros(1, it_max);
     omega_hist = zeros(1, it_max);
-    precond = diag_prec(A_N, Q);
+    precond = LINEAR_SOLVERS.diag_prec(A_N, Q);
     %
     % Quasi-Newton's solver (Preconditioner 2)
     %
@@ -68,7 +68,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
 
         % solution of the constitutive problem
         E(:) = B * U(:); % strain at integration points
-        [S, m, M] = constitutive_problem_quasi2(E,mu_0,mu_infty,lambda,p);
+        [S, m, M] = CONSTITUTIVE_PROBLEM.constitutive_problem_quasi2(E,mu_0,mu_infty,lambda,p);
         % solution of the constitutive problem
 
         % vector of internal forces
@@ -102,7 +102,7 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
         tol = 1e-1;
         max_iter = 30;
         [dU(Q), iter, resvec, flag, krylov_recycle] = ...
-            DCG_adaptive(A_N, b_N, b_N * 0, precond, tol, max_iter, krylov_recycle);
+            LINEAR_SOLVERS.DCG_adaptive(A_N, b_N, b_N * 0, precond, tol, max_iter, krylov_recycle);
         itcg = itcg + iter;
 
         if it == 1

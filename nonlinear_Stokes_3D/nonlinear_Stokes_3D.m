@@ -12,11 +12,26 @@
 % ======================================================================
 %
 
+% Resolve local dependencies relative to this script.
+script_dir = fileparts(mfilename('fullpath'));
+addpath(script_dir);
+agmg_dir = fullfile(script_dir, 'agmg');
+
 % if there is AGMG solver present in path (function agmg(...))
 % "Notay, Y. AGMG software and documentation. Available at http://agmg.eu"
 % Note: academic licence is free upon an email request
 global AGMG_present
-AGMG_present = 1;
+if exist(fullfile(agmg_dir, 'agmg.m'), 'file') == 2
+    addpath(agmg_dir);
+end
+has_agmg_backend = exist('dmtlagmg', 'file') == 3 || exist('zmtlagmg', 'file') == 3 || ...
+    exist('dmtlagmg_sm', 'file') == 3 || exist('zmtlagmg_sm', 'file') == 3;
+if exist('agmg', 'file') == 2 && has_agmg_backend
+    AGMG_present = 1;
+else
+    AGMG_present = 0;
+    fprintf('AGMG not usable from %s, falling back to ichol preconditioning.\n', agmg_dir);
+end
 
 %
 % Main input data 
@@ -53,11 +68,11 @@ AGMG_present = 1;
   switch(elem_type)
     case 'P1'
         [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
-                               mesh_P1(density,size_xy_0,size_xy_L,size_z);
+                               MESH.mesh_P1(density,size_xy_0,size_xy_L,size_z);
         fprintf('P1 elements: \n')
     case 'P2'
         [COORD,ELEM,SURF1,SURF2,SURF3,SURF4,SURF5,SURF6]=...
-                               mesh_P2(density,size_xy_0,size_xy_L,size_z);
+                               MESH.mesh_P2(density,size_xy_0,size_xy_L,size_z);
         fprintf('P2 elements: \n')
     otherwise
           disp('bad choice of element type');
@@ -69,9 +84,9 @@ AGMG_present = 1;
 %
   switch(boundary)
     case 'BC1'
-        [U_3,Q]=boundary_BC1(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
+        [U_3,Q]=MESH.boundary_BC1(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
     case 'BC2'
-        [U_3,Q]=boundary_BC2(COORD,SURF1,SURF3,SURF4,SURF5,SURF6,size_xy_0);
+        [U_3,Q]=MESH.boundary_BC2(COORD,SURF1,SURF3,SURF4,SURF5,SURF6,size_xy_0);
     otherwise
         disp('bad choice of element type');
   end        
@@ -82,12 +97,12 @@ AGMG_present = 1;
 %
 
 % quadrature points and weights for volume and surface integration
-[Xi, WF] = quadrature_volume(elem_type);
-[Xi_s, WF_s] = quadrature_surface(elem_type);
+[Xi, WF] = ASSEMBLY.quadrature_volume(elem_type);
+[Xi_s, WF_s] = ASSEMBLY.quadrature_surface(elem_type);
 
 % local basis functions and their derivatives for volume and surface
-[HatP, DHatP1, DHatP2, DHatP3] = local_basis_volume(elem_type, Xi);
-[HatP_s, DHatP1_s, DHatP2_s] = local_basis_surface(elem_type, Xi_s);
+[HatP, DHatP1, DHatP2, DHatP3] = ASSEMBLY.local_basis_volume(elem_type, Xi);
+[HatP_s, DHatP1_s, DHatP2_s] = ASSEMBLY.local_basis_surface(elem_type, Xi_s);
 
 %
 % Number of nodes, elements and integration points + print
@@ -117,7 +132,7 @@ AGMG_present = 1;
 %
 % Assembling of auxiliary arrays for Newton's and quasi-Newton's methods
 %  
-  [B,K_elast,WEIGHT]=auxiliary_matrices(ELEM,COORD,mu_0,...
+  [B,K_elast,WEIGHT]=ASSEMBLY.auxiliary_matrices(ELEM,COORD,mu_0,...
                                                   DHatP1,DHatP2,DHatP3,WF);  
 
 %
@@ -126,7 +141,7 @@ AGMG_present = 1;
   % Volume forces at integration points: f_V_int has size (3, n_int).
   f_V_int = [zeros(1, n_int); zeros(1, n_int); -gamma];
   % Compute the volume force vector.
-  f = vector_volume_3D(ELEM, COORD, f_V_int, HatP, WEIGHT);
+  f = ASSEMBLY.vector_volume_3D(ELEM, COORD, f_V_int, HatP, WEIGHT);
 
 %
 % Newton's and quasi-Newton's solvers
@@ -137,19 +152,19 @@ AGMG_present = 1;
 
   % standard Newton method
   tic; 
-  [U_N, it_N, crit_hist_N]=newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p);
+  [U_N, it_N, crit_hist_N]=NEWTON.newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p);
   time_Newton=toc;
   fprintf("     solver's runtime:  " + time_Newton + "-----\n");
 
   % quasi-Newton method - preconditioner 1 (simplified stiffness matrix with variable coefficients)
   tic; 
-  [U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1]=newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
+  [U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1]=NEWTON.newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
   time_qNewton1=toc;
   fprintf("     solver's runtime:  " + time_qNewton1 + "-----\n");
 
   % quasi-Newton method - preconditioner 2 (simplified stiffness matrix with fixed coefficients)
   tic; 
-  [U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2]=newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
+  [U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2]=NEWTON.newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p);
   time_qNewton2=toc;
   fprintf("     solver's runtime:  " + time_qNewton2 + "-----\n");
 
@@ -159,17 +174,17 @@ AGMG_present = 1;
 
   % mesh  
   if density<5
-   draw_mesh(COORD,SURF,elem_type) 
+   VIZ.draw_mesh(COORD,SURF,elem_type) 
   end
 
   % total displacements + deformed shape - newton
   U_total = sqrt(U_N(1,:).^2 + U_N(2,:).^2 + U_N(3,:).^2);
-  draw_quantity(COORD,SURF,1*U_N,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
+  VIZ.draw_quantity(COORD,SURF,1*U_N,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
 
   % U_total = sqrt(U_qN1(1,:).^2 + U_qN1(2,:).^2 + U_qN1(3,:).^2);
-  % draw_quantity(COORD,SURF,1*U_qN1,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
+  % VIZ.draw_quantity(COORD,SURF,1*U_qN1,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
   % U_total = sqrt(U_qN2(1,:).^2 + U_qN2(2,:).^2 + U_qN2(3,:).^2);
-  % draw_quantity(COORD,SURF,1*U_qN2,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
+  % VIZ.draw_quantity(COORD,SURF,1*U_qN2,U_total,elem_type,size_xy_0,size_xy_L,size_z) 
 
   % values of the function a
   E= reshape( B*U_N(:) , 6,[] ) ;
@@ -178,21 +193,21 @@ AGMG_present = 1;
   z=max(0,sum(E.*tilde_E));        % scalar product of the deviatoric strain
   r=sqrt(z);                       % norm of the deviatoric strain
   a=mu_infty+(mu_0-mu_infty).*(1+lambda.*(r.^2)).^(p/2-1);
-  a_node=transformation(a,ELEM,WEIGHT);
-  draw_quantity(COORD,SURF,0*U_N,a_node,elem_type,size_xy_0,size_xy_L,size_z);
+  a_node=VIZ.transformation(a,ELEM,WEIGHT);
+  VIZ.draw_quantity(COORD,SURF,0*U_N,a_node,elem_type,size_xy_0,size_xy_L,size_z);
   colorbar off; colorbar('location','eastoutside')  
 
   % values of div u
   div=E(1,:)+E(2,:)+E(3,:);
-  div_node=transformation(div,ELEM,WEIGHT);
-  draw_quantity(COORD,SURF,0*U_N,div_node,elem_type,size_xy_0,size_xy_L,size_z);
+  div_node=VIZ.transformation(div,ELEM,WEIGHT);
+  VIZ.draw_quantity(COORD,SURF,0*U_N,div_node,elem_type,size_xy_0,size_xy_L,size_z);
   colorbar off; colorbar('location','eastoutside')  
 
   % convergence of the Newton-like solvers 
-  figure_convergence(1:it_N, crit_hist_N, ...
+  VIZ.figure_convergence(1:it_N, crit_hist_N, ...
                      1:it_qN1, crit_hist_qN1, ...
                      1:it_qN2, crit_hist_qN2)
 
   % line search coefficients
-  figure_omega(1:it_qN1-1, omega_hist_qN1,...
+  VIZ.figure_omega(1:it_qN1-1, omega_hist_qN1,...
                1:it_qN2-1, omega_hist_qN2)
