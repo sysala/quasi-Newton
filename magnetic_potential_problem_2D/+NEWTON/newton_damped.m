@@ -53,7 +53,7 @@ function [U, it, crit_hist,omega_hist]=newton_damped(U_ini,WEIGHT,K_fix,B,f,hete
 
      % constitutive operator and its derivative
      E(:) = B*U ;   % strain at integration points
-     [S,DS1]=constitutive_problem(E,heter_int,alpha,beta);
+     [S,DS1] = CONSTITUTIVE_PROBLEM.constitutive_problem(E, heter_int, alpha, beta);
                           % solution of the constitutive problem
      
      % tangential stiffness matrix

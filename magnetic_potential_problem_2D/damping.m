@@ -23,7 +23,7 @@ function omega=damping(U_it,dU,B,f,WEIGHT,heter_int,alpha,beta)
     it_damp=it_damp+1;
     U_omega = U_it + omega*dU ;
     E_omega = reshape( B*U_omega, 2,[] ) ;
-    S_omega=constitutive_problem(E_omega,heter_int,alpha,beta);
+    S_omega = CONSTITUTIVE_PROBLEM.constitutive_problem(E_omega, heter_int, alpha, beta);
     F_omega = B'*reshape(repmat(WEIGHT,2,1).*S_omega, [],1);
     decrease = (F_omega'-f')*dU;
     if decrease<0

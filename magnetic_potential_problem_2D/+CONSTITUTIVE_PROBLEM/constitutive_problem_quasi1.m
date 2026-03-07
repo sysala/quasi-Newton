@@ -34,11 +34,14 @@ function   [S,DS1,m,M]= constitutive_problem_quasi1 (E,heter_int,alpha,beta)
     a1_der=8*beta*(1-alpha)*(r1.^7)./((r1.^8+beta).^2);
     a1_bar=a1+r1.*a1_der;
     gamma=1/2;  
-    DS1=(1-gamma)*a1+gamma*a1_bar;
+    DS1 = zeros(1, length(r));
+    if ~isempty(r1)
+        DS1(heter_int) = (1-gamma) * a1 + gamma * a1_bar;
+    end
 
 % parameters m and M defining the quasi-Newton step
-    rho=max(a1_bar./a1);
-    if size(rho,2)>0
+    if ~isempty(a1_bar) && ~isempty(a1)
+      rho=max(a1_bar./a1);
       m=1/(1-gamma+rho*gamma);
       M=rho/(1-gamma+rho*gamma);
     else

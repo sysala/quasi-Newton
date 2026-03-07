@@ -1,4 +1,4 @@
-function [U, it, crit_hist, omega_hist]=newton_quasi1_damped(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
+function [U, it, crit_hist, omega_hist]=newton_quasi2_damped(U_ini,WEIGHT,K_fix,B,f,heter_int,r_crit,alpha,beta)
                                
 %--------------------------------------------------------------------------
 % The Quasi-Newton method for solution of the system 
@@ -11,6 +11,7 @@ function [U, it, crit_hist, omega_hist]=newton_quasi1_damped(U_ini,WEIGHT,K_fix,
 %   B - the gradient matrix, size(B)=(2*n_int,n_uknown)
 %   f - vector of external forces, size(f)=(n_uknown,1)
 %   heter_int - a logical array indicating the heterogeneity
+%   r_crit - critical values of |\nabla U|
 %   alpha, beta - material parameters
 %
 % Output data:
@@ -51,12 +52,12 @@ function [U, it, crit_hist, omega_hist]=newton_quasi1_damped(U_ini,WEIGHT,K_fix,
      
      % constitutive operator and its derivative
      E(:) = B*U ;   % strain at integration points
-     [S,DS1,m,M]=constitutive_problem_quasi1(E,heter_int,alpha,beta);
+     [S,DS1,m,M] = CONSTITUTIVE_PROBLEM.constitutive_problem_quasi2(E, heter_int, r_crit, alpha, beta);
                           % solution of the constitutive problem
          
      % tangential stiffness matrix
-     vD = repmat(WEIGHT1.*DS1,2,1) ;   
-     D_p=sparse(AUX1(:),AUX1(:),vD(:),2*n_int, 2*n_int);
+    vD = repmat(WEIGHT1, 2, 1);   
+    D_p=sparse(AUX1(:), AUX1(:), vD(:),2*n_int, 2*n_int);
      K = K_fix+B'*D_p*B;   
  
      % vector of internal forces

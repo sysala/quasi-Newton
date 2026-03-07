@@ -1,7 +1,7 @@
-function [U, it, crit_hist]=newton(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
+function [U, it, crit_hist, omega_hist]=newton_quasi1_damped(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
                                
 %--------------------------------------------------------------------------
-% The Newton method for solution of the system 
+% The Quasi-Newton method for solution of the system 
 %              find U:   F(U)=f
 %
 % Input data:
@@ -17,27 +17,27 @@ function [U, it, crit_hist]=newton(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
 %   U - approximation of the solution, size(U)=(n_uknown,1)
 %   it - number of Newton's iteration
 %   crit_hist - evaluation of the stopping criterion
+%   omega_hist - history of damping parameters
 %
 %--------------------------------------------------------------------------
 
 %
-% Initialization 
+% Initialization     
 %
-
+   
   it_max=100;
   tol=1e-9;
   crit_hist=zeros(1,it_max);
+  omega_hist=zeros(1,it_max);
   n_int=length(WEIGHT);
   E = zeros(2,n_int);  % values of the gradient at integration points               
   U=U_ini;             % initial approximation of the solution
 
 %
-% Auxiliary arrays
+% Auxiliary array
 %
   AUX=reshape(1:2*n_int,2,n_int);
   AUX1=AUX(:,heter_int);
-  iD=repmat(AUX1,2,1); 
-  jD=kron(AUX1,ones(2,1));
   WEIGHT1=WEIGHT(heter_int);
 
 %  
@@ -48,25 +48,26 @@ function [U, it, crit_hist]=newton(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
   while true         
       
      it=it+1;  
-
+     
      % constitutive operator and its derivative
      E(:) = B*U ;   % strain at integration points
-     [S,DS1]=constitutive_problem(E,heter_int,alpha,beta);
+     [S,DS1,m,M] = CONSTITUTIVE_PROBLEM.constitutive_problem_quasi1(E, heter_int, alpha, beta);
                           % solution of the constitutive problem
-       
+         
      % tangential stiffness matrix
-     vD = repmat(WEIGHT1,4,1).*DS1 ;      
-     D_p = sparse( iD(:),jD(:),vD(:), 2*n_int,2*n_int ) ;   
+    vD = repmat(WEIGHT.*DS1,2,1) ;   
+    D_p=sparse(AUX(:),AUX(:),vD(:),2*n_int, 2*n_int);
      K = K_fix+B'*D_p*B;   
  
      % vector of internal forces
-     F = B'*reshape(repmat(WEIGHT,2,1).*S, 2*n_int,1) ;    
+     F = B'*reshape(repmat(WEIGHT,2,1).*S, 2*n_int,1) ;      
 
      % stopping criterion 
      criterion = norm(f-F)/norm(f);   
      crit_hist(it)=criterion;
      if  criterion < tol
         crit_hist=crit_hist(1:it);
+        omega_hist=omega_hist(1:it-1);
         fprintf(' number of iteration=%d  ',it); 
         fprintf(' stopping criterion=%e  ',criterion); 
         fprintf('\n'); 
@@ -75,6 +76,7 @@ function [U, it, crit_hist]=newton(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
 
      % test on number of iteration
      if  it == it_max
+        omega_hist=omega_hist(1:it-1);
         fprintf('     Newton solver converges slowly: stopping criterion=%e  ',criterion)
         fprintf('\n'); 
         break
@@ -82,8 +84,10 @@ function [U, it, crit_hist]=newton(U_ini,WEIGHT,K_fix,B,f,heter_int,alpha,beta)
         
      % Newton's increment and next iteration
      dU = K\(f-F);  
-     U= U + dU ;   
-     
+     omega=damping(U,dU,B,f,WEIGHT,heter_int,alpha,beta);
+     omega_hist(it)=omega;
+     U = U + omega*dU ;
+      
   end % true     
   
 end % function
