@@ -40,3 +40,5 @@ nonlinear_Stokes_3D/nonlinear_Stokes_3D.asv
 third_party/
 nonlinear_Stokes_3D/agmg/
 nonlinear_Stokes_3D/hypre_boomeramg_mex.mexa64
+magnetic_potential_problem_2D/hypre_boomeramg_mex.mexa64
+magnetic_potential_problem_2D/results/
