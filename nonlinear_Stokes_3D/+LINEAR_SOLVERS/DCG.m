@@ -29,7 +29,7 @@ classdef DCG < LINEAR_SOLVERS.DFGMRES
             obj@LINEAR_SOLVERS.DFGMRES(preconditioner_builder, tolerance, max_iterations, tolerance_deflation_basis, verbose);
         end
         
-        function [u, nit] = solve_core(obj, A, b)
+        function [u, nit, timed_out] = solve_core(obj, A, b)
             %--------------------------------------------------------------------------
             % solve_core is the core implementation of the flexible GMRES solver.
             %
@@ -38,9 +38,9 @@ classdef DCG < LINEAR_SOLVERS.DFGMRES
             % It calls the function flexible_GMRES_deflate from the LINEAR_SOLVERS
             % package with the provided parameters.
             %--------------------------------------------------------------------------
-            [u, nit, residuals] = LINEAR_SOLVERS.dcg_solver(A, b, ...
+            [u, nit, residuals, timed_out] = LINEAR_SOLVERS.dcg_solver(A, b, ...
                 obj.preconditioner, obj.deflation_basis, ...
-                obj.max_iterations, obj.tolerance, []);
+                obj.max_iterations, obj.tolerance, [], obj.max_solve_time_seconds);
         end
     end
 end

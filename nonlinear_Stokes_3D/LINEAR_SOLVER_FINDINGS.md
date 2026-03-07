@@ -63,11 +63,11 @@ nonlinear_Stokes_3D
 
 BoomerAMG uses the same near-null-space construction pattern as `slope_stability`.
 
-The repository root now also contains a one-call setup script copied from the
-`slope_stability` workflow and adapted for `nonlinear_Stokes_3D`:
+The project now also contains a one-call setup script in `scripts/`, copied
+from the `slope_stability` workflow and adapted for `nonlinear_Stokes_3D`:
 
 ```bash
-bash nonlinear_Stokes_3D/setup_hypre_mex.sh --jobs 8
+bash nonlinear_Stokes_3D/scripts/setup_hypre_mex.sh --jobs 8
 ```
 
 One important detail on this machine: MATLAB MEX linking did not work with the

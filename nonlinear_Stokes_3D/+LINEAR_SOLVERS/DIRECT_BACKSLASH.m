@@ -41,7 +41,7 @@ classdef DIRECT_BACKSLASH < LINEAR_SOLVERS.DFGMRES
         end
         
 
-        function [u, nit] = solve_core(~, A, b)
+        function [u, nit, timed_out] = solve_core(~, A, b)
             %--------------------------------------------------------------------------
             % solve_core computes the solution using MATLAB's backslash operator.
             %
@@ -52,6 +52,7 @@ classdef DIRECT_BACKSLASH < LINEAR_SOLVERS.DFGMRES
             %--------------------------------------------------------------------------
             u = A \ b;
             nit = 0;
+            timed_out = false;
         end
         
         function obj = expand_deflation_basis(obj, ~)

@@ -34,32 +34,75 @@ end
 if ~exist('density', 'var')
     density=12;      % a positive integer defining mesh density in x-direction
 end
-size_xy_0 = 6;  % size of the body in directions x and y on the left
-size_xy_L = 5;  % size of the body in directions x and y on the right
-size_z = 50;      % size of the body in z-direction
+if ~exist('size_xy_0', 'var')
+    size_xy_0 = 6;  % size of the body in directions x and y on the left
+end
+if ~exist('size_xy_L', 'var')
+    size_xy_L = 5;  % size of the body in directions x and y on the right
+end
+if ~exist('size_z', 'var')
+    size_z = 50;      % size of the body in z-direction
+end
 % It is assumed that size_xy_L < size_xy_0 < size_z.
 
 % Material parameters
-mu_0 = 1;
-mu_infty = 1e-3;
-lambda = 10;
-p = 1.1;
+if ~exist('mu_0', 'var')
+    mu_0 = 1;
+end
+if ~exist('mu_infty', 'var')
+    mu_infty = 1e-3;
+end
+if ~exist('lambda', 'var')
+    lambda = 10;
+end
+if ~exist('p', 'var')
+    p = 1.1;
+end
 
 % Constant volume force representing pore pressure gradient
-gamma = 0.008 ;
+if ~exist('gamma', 'var')
+    gamma = 0.008;
+end
 
 % Boundary conditions - two available choices:
 % 'BC1' - zero velocity field in the normal direction on the shell
-% 'BC1' - zero velocity field in all directions on the shell
-boundary='BC1';
-u_z = 5 ;  % prescribed velocity in the direction z and at the prismatic centre
+% 'BC2' - zero velocity field in all directions on the shell
+% 'BC3' - paper-style variant: u_z fixed on the shell, constant inlet in u_z
+if ~exist('boundary', 'var')
+    boundary='BC1';
+end
+if ~exist('u_z', 'var')
+    u_z = 5;  % prescribed velocity in the direction z and at the prismatic centre
+end
 
 % Linear solver configuration
 if ~exist('solver_type', 'var')
-    solver_type = "DFGMRES_HYPRE_BOOMERAMG";
+    solver_type = "DCG_HYPRE_BOOMERAMG";
 end
-if ~exist('linear_solver_tolerance', 'var')
-    linear_solver_tolerance = 1e-1;
+if ~exist('linear_solver_tolerance_newton', 'var')
+    if exist('linear_solver_tolerance', 'var')
+        linear_solver_tolerance_newton = linear_solver_tolerance;
+    else
+        linear_solver_tolerance_newton = 1e-4;
+    end
+end
+if ~exist('linear_solver_tolerance_qn1', 'var')
+    if exist('linear_solver_tolerance_quasi', 'var')
+        linear_solver_tolerance_qn1 = linear_solver_tolerance_quasi;
+    elseif exist('linear_solver_tolerance', 'var')
+        linear_solver_tolerance_qn1 = linear_solver_tolerance;
+    else
+        linear_solver_tolerance_qn1 = 1e-1;
+    end
+end
+if ~exist('linear_solver_tolerance_qn2', 'var')
+    if exist('linear_solver_tolerance_quasi', 'var')
+        linear_solver_tolerance_qn2 = linear_solver_tolerance_quasi;
+    elseif exist('linear_solver_tolerance', 'var')
+        linear_solver_tolerance_qn2 = linear_solver_tolerance;
+    else
+        linear_solver_tolerance_qn2 = 1e-1;
+    end
 end
 if ~exist('linear_solver_maxit', 'var')
     linear_solver_maxit = 1000;
@@ -76,6 +119,18 @@ if ~exist('boomeramg_opts', 'var')
 end
 if ~exist('run_postprocess', 'var')
     run_postprocess = true;
+end
+if ~exist('nonlinear_method_max_runtime_seconds', 'var')
+    nonlinear_method_max_runtime_seconds = 300;
+end
+if ~exist('run_newton', 'var')
+    run_newton = true;
+end
+if ~exist('run_qn1', 'var')
+    run_qn1 = true;
+end
+if ~exist('run_qn2', 'var')
+    run_qn2 = true;
 end
 
 %
@@ -103,6 +158,8 @@ switch(boundary)
         [U_3,Q]=MESH.boundary_BC1(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
     case 'BC2'
         [U_3,Q]=MESH.boundary_BC2(COORD,SURF1,SURF3,SURF4,SURF5,SURF6,size_xy_0);
+    case 'BC3'
+        [U_3,Q]=MESH.boundary_BC3(COORD,SURF1,SURF3,SURF4,SURF5,SURF6);
     otherwise
         disp('bad choice of element type');
 end
@@ -163,33 +220,65 @@ f = ASSEMBLY.vector_volume_3D(ELEM, COORD, f_V_int, HatP, WEIGHT);
 % Newton's and quasi-Newton's solvers
 %
 
-linear_system_solver = LINEAR_SOLVERS.set_linear_solver(agmg_dir, solver_type, ...
-    linear_solver_tolerance, linear_solver_maxit, deflation_basis_tolerance, ...
+linear_system_solver_newton = LINEAR_SOLVERS.set_linear_solver(agmg_dir, solver_type, ...
+    linear_solver_tolerance_newton, linear_solver_maxit, deflation_basis_tolerance, ...
+    linear_solver_printing, Q, COORD, boomeramg_opts);
+linear_system_solver_qn1 = LINEAR_SOLVERS.set_linear_solver(agmg_dir, solver_type, ...
+    linear_solver_tolerance_qn1, linear_solver_maxit, deflation_basis_tolerance, ...
+    linear_solver_printing, Q, COORD, boomeramg_opts);
+linear_system_solver_qn2 = LINEAR_SOLVERS.set_linear_solver(agmg_dir, solver_type, ...
+    linear_solver_tolerance_qn2, linear_solver_maxit, deflation_basis_tolerance, ...
     linear_solver_printing, Q, COORD, boomeramg_opts);
 
 % initialization displacement
 U_it = [zeros(1,n_n); zeros(1,n_n); U_3] ;
 
 % standard Newton method
-tic;
-[U_N, it_N, crit_hist_N]=NEWTON.newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p, ...
-    linear_system_solver.copy());
-time_Newton=toc;
-fprintf("     solver's runtime:  " + time_Newton + "-----\n");
+U_N = nan(size(U_it));
+it_N = NaN;
+crit_hist_N = [];
+itcg_N = NaN;
+timed_out_N = false;
+time_Newton = NaN;
+if run_newton
+    tic;
+    [U_N, it_N, crit_hist_N, itcg_N, timed_out_N]=NEWTON.newton(U_it,WEIGHT,B,f,Q,mu_0,mu_infty,lambda,p, ...
+        linear_system_solver_newton.copy(), nonlinear_method_max_runtime_seconds);
+    time_Newton=toc;
+    fprintf("     solver's runtime:  " + time_Newton + "-----\n");
+end
 
 % quasi-Newton method - preconditioner 1 (simplified stiffness matrix with variable coefficients)
-tic;
-[U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1]=NEWTON.newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
-    linear_system_solver.copy());
-time_qNewton1=toc;
-fprintf("     solver's runtime:  " + time_qNewton1 + "-----\n");
+U_qN1 = nan(size(U_it));
+it_qN1 = NaN;
+crit_hist_qN1 = [];
+omega_hist_qN1 = [];
+itcg_qN1 = NaN;
+timed_out_qN1 = false;
+time_qNewton1 = NaN;
+if run_qn1
+    tic;
+    [U_qN1, it_qN1, crit_hist_qN1, omega_hist_qN1, itcg_qN1, timed_out_qN1]=NEWTON.newton_quasi1(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
+        linear_system_solver_qn1.copy(), nonlinear_method_max_runtime_seconds);
+    time_qNewton1=toc;
+    fprintf("     solver's runtime:  " + time_qNewton1 + "-----\n");
+end
 
 % quasi-Newton method - preconditioner 2 (simplified stiffness matrix with fixed coefficients)
-tic;
-[U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2]=NEWTON.newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
-    linear_system_solver.copy());
-time_qNewton2=toc;
-fprintf("     solver's runtime:  " + time_qNewton2 + "-----\n");
+U_qN2 = nan(size(U_it));
+it_qN2 = NaN;
+crit_hist_qN2 = [];
+omega_hist_qN2 = [];
+itcg_qN2 = NaN;
+timed_out_qN2 = false;
+time_qNewton2 = NaN;
+if run_qn2
+    tic;
+    [U_qN2, it_qN2, crit_hist_qN2, omega_hist_qN2, itcg_qN2, timed_out_qN2]=NEWTON.newton_quasi2(U_it,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p, ...
+        linear_system_solver_qn2.copy(), nonlinear_method_max_runtime_seconds);
+    time_qNewton2=toc;
+    fprintf("     solver's runtime:  " + time_qNewton2 + "-----\n");
+end
 
 if contains(upper(string(solver_type)), "BOOMERAMG")
     LINEAR_SOLVERS.hypre_boomeramg_clear();
@@ -198,7 +287,7 @@ end
 %
 % Visualization of selected results
 %
-if run_postprocess
+if run_postprocess && run_newton
     % mesh
     if density<5
         VIZ.draw_mesh(COORD,SURF,elem_type)

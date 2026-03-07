@@ -1,4 +1,4 @@
-function [x, iters, res_hist] = dfgmres_solver(A, b, M, W, maxits, tol, x0)
+function [x, iters, res_hist, timed_out] = dfgmres_solver(A, b, M, W, maxits, tol, x0, max_time_seconds)
 %DFGMRES  Deflated Flexible GMRES iterative solver.
 %
 %   [x, iters, res_hist] = DFGMRES(A, b, M, W, maxits, tol, x0) solves the
@@ -42,6 +42,11 @@ if isempty(x0)
 else
     x = x0;
 end
+if nargin < 8 || isempty(max_time_seconds)
+    max_time_seconds = inf;
+end
+timed_out = false;
+solve_timer = tic;
 if isempty(W)
     Proj_fct = @(x) x;
 else
@@ -78,6 +83,11 @@ g = zeros(maxits+1, 1);
 g(1) = res_norm;
 
 for j = 1:maxits
+    if toc(solve_timer) >= max_time_seconds
+        timed_out = true;
+        iters = j - 1;
+        break;
+    end
     % Apply preconditioner to the j-th Krylov basis vector
     w = M(V(:,j));
     w = Proj_fct(w);

@@ -36,6 +36,8 @@ classdef DFGMRES < handle
         max_iterations
         tolerance_deflation_basis
         verbose
+        max_solve_time_seconds
+        last_solve_timed_out
         iteration_collector  % Shared among all copies.
         instance_id          % Unique ID in iteration_collector.
     end
@@ -63,6 +65,8 @@ classdef DFGMRES < handle
             obj.max_iterations = max_iterations;
             obj.tolerance_deflation_basis = tolerance_deflation_basis;
             obj.verbose = verbose;
+            obj.max_solve_time_seconds = inf;
+            obj.last_solve_timed_out = false;
             
             % Initialize the iteration collector and register this instance.
             obj.iteration_collector = LINEAR_SOLVERS.IterationCollector();
@@ -137,8 +141,9 @@ classdef DFGMRES < handle
             % of iterations and time taken, and optionally prints verbose output.
             %--------------------------------------------------------------------------
             t_start = tic;
-            [u, nit] = obj.solve_core(A, b);
+            [u, nit, timed_out] = obj.solve_core(A, b);
             elapsed_time = toc(t_start);
+            obj.last_solve_timed_out = timed_out;
             obj.iteration_collector.store_iteration(obj.instance_id, nit, elapsed_time);
             
             if obj.verbose
@@ -146,7 +151,7 @@ classdef DFGMRES < handle
             end
         end
         
-        function [u, nit] = solve_core(obj, A, b)
+        function [u, nit, timed_out] = solve_core(obj, A, b)
             %--------------------------------------------------------------------------
             % solve_core is the core implementation of the flexible GMRES solver.
             %
@@ -155,9 +160,9 @@ classdef DFGMRES < handle
             % It calls the function flexible_GMRES_deflate from the LINEAR_SOLVERS
             % package with the provided parameters.
             %--------------------------------------------------------------------------
-            [u, nit, ~] = LINEAR_SOLVERS.dfgmres_solver(A, b, ...
+            [u, nit, ~, timed_out] = LINEAR_SOLVERS.dfgmres_solver(A, b, ...
                 obj.preconditioner, obj.deflation_basis, ...
-                obj.max_iterations, obj.tolerance, []);
+                obj.max_iterations, obj.tolerance, [], obj.max_solve_time_seconds);
         end
 
         function obj = expand_deflation_basis(obj, additional_vectors)
@@ -185,6 +190,8 @@ classdef DFGMRES < handle
                             obj.max_iterations, obj.tolerance_deflation_basis, obj.verbose);
             new_obj.deflation_basis = obj.deflation_basis;  
             new_obj.preconditioner = obj.preconditioner; 
+            new_obj.max_solve_time_seconds = obj.max_solve_time_seconds;
+            new_obj.last_solve_timed_out = false;
             new_obj.iteration_collector = obj.iteration_collector;
             new_obj.instance_id = obj.iteration_collector.register_instance();
         end

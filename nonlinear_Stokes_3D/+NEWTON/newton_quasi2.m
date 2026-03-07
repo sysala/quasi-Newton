@@ -1,4 +1,4 @@
-function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p,linear_system_solver)
+function [U, it, crit_hist, omega_hist, itcg, timed_out] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f,Q,mu_0,mu_infty,lambda,p,linear_system_solver,max_runtime_seconds)
 
 
     %--------------------------------------------------------------------------
@@ -48,11 +48,24 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
     %
     % Quasi-Newton's solver (Preconditioner 2)
     %
+    if nargin < 12 || isempty(max_runtime_seconds)
+        max_runtime_seconds = inf;
+    end
+    method_timer = tic;
 
     it = 0; % iteration number
     itcg = 0;
+    timed_out = false;
 
     while true
+        if toc(method_timer) >= max_runtime_seconds
+            timed_out = true;
+            crit_hist = crit_hist(1:it);
+            omega_hist = omega_hist(1:max(it - 1, 0));
+            fprintf('     Quasi-Newton method 2 timed out after %.2f s', max_runtime_seconds)
+            fprintf('\n');
+            break
+        end
 
         it = it + 1;
 
@@ -88,9 +101,27 @@ function [U, it, crit_hist, omega_hist] = newton_quasi2(U_ini,WEIGHT,K_elast,B,f
             break
         end
 
+        remaining_time = max_runtime_seconds - toc(method_timer);
+        if remaining_time <= 0
+            timed_out = true;
+            crit_hist = crit_hist(1:it);
+            omega_hist = omega_hist(1:max(it - 1, 0));
+            fprintf('     Quasi-Newton method 2 timed out after %.2f s', max_runtime_seconds)
+            fprintf('\n');
+            break
+        end
+        linear_system_solver.max_solve_time_seconds = remaining_time;
         linear_system_solver.A_orthogonalize(A_N);
         [dU(Q), iter] = linear_system_solver.solve(A_N, b_N);
         itcg = itcg + iter;
+        if linear_system_solver.last_solve_timed_out
+            timed_out = true;
+            crit_hist = crit_hist(1:it);
+            omega_hist = omega_hist(1:max(it - 1, 0));
+            fprintf('     Quasi-Newton method 2 timed out after %.2f s', max_runtime_seconds)
+            fprintf('\n');
+            break
+        end
         linear_system_solver.expand_deflation_basis(dU(Q));
 
         %fprintf('%d ', iter);

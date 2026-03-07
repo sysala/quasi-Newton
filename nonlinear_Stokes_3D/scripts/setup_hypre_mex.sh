@@ -27,8 +27,9 @@ Environment overrides:
 EOF
 }
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$ROOT_DIR/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 HYPRE_GIT_URL="${HYPRE_GIT_URL:-https://github.com/hypre-space/hypre.git}"
 HYPRE_REF="master"
 HYPRE_SRC_DIR="${HYPRE_SRC_DIR:-$REPO_DIR/third_party/hypre}"
@@ -106,7 +107,7 @@ cmake --install "$HYPRE_BUILD_DIR"
 
 if [[ $DO_MEX -eq 1 ]]; then
   echo "[3/3] Building MATLAB MEX binding"
-  "$MATLAB_BIN" -batch "cd('$ROOT_DIR'); LINEAR_SOLVERS.build_hypre_boomeramg_mex('$HYPRE_INSTALL_DIR');"
+  "$MATLAB_BIN" -batch "cd('$PROJECT_DIR'); LINEAR_SOLVERS.build_hypre_boomeramg_mex('$HYPRE_INSTALL_DIR');"
 else
   echo "[3/3] Skipped MATLAB MEX build (--skip-mex)"
 fi

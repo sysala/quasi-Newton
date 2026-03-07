@@ -1,4 +1,4 @@
-function [x, iter, resvec] = dcg_solver(A, b, M, W, maxits, tol, x0)
+function [x, iter, resvec, timed_out] = dcg_solver(A, b, M, W, maxits, tol, x0, max_time_seconds)
 %DEFLATEDCG  Deflated Conjugate Gradient solver.
 %
 %   [x, iters, res_hist] = DCG(A, b, M, W, maxits, tol, x0) solves the
@@ -42,6 +42,11 @@ if isempty(x0)
 else
     x = x0;
 end
+if nargin < 8 || isempty(max_time_seconds)
+    max_time_seconds = inf;
+end
+timed_out = false;
+solve_timer = tic;
 if isempty(W)
     P = @(x) x;
 else
@@ -66,6 +71,11 @@ gamma_old=dot(r,z);
 resvec=zeros(maxits+1,1);
 resvec(1)=res;
 for j=1:maxits
+    if toc(solve_timer) >= max_time_seconds
+        timed_out = true;
+        j = j - 1;
+        break;
+    end
     s=A*p;
     alpha=gamma_old/dot(s,p);
     x=x+alpha*p;
@@ -82,6 +92,6 @@ for j=1:maxits
     gamma_old=gamma_new;
 end
 
-resvec=resvec(1:j+1);
-iter=j;
+resvec=resvec(1:max(1, j+1));
+iter=max(0, j);
 end
