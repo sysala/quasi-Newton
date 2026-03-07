@@ -40,6 +40,9 @@ plain directories for scripts, figures, and cached experiment outputs.
 - `scripts/run_selected_tolerance_mesh_method.m`
   Runs or marks one selected-mesh nonlinear method case (`newton`, `qn1`, `qn2`) to support
   resumable per-method orchestration.
+- `scripts/run_damping_level4_sweep.m`
+  Runs the level-4 damping sweep over `δ`, `ρ`, and `κ` with fixed outer tolerances
+  (`N = 1e-4`, `qN1/qN2 = 1e-1`) and writes `DAMPING_LEVEL4_EXPERIMENTS.md`.
 - `scripts/generate_paper_experiments_md.m`
   Rebuilds `PAPER_EXPERIMENTS.md` from checkpoint data.
 - `scripts/plot_paper_tolerance_sweep.m`
